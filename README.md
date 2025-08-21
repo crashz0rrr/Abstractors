@@ -77,7 +77,7 @@ abstractors-game/
 
 ### 1. Clone repo
 ```bash
-git clone https://github.com/your-org/abstractors-game.git
+git clone https://github.com/crashz0rrr/Abstractors.git
 cd abstractors-game
 ```
 
@@ -207,12 +207,6 @@ npm run test
 - 🚧 Marketplace contract & APIs.  
 - 🚧 PvE exploration + bonuses.  
 - 🚧 PvP combat + staking tournaments.  
-
----
-
-## 👥 Contributing
-
-PRs welcome! Please fork and submit changes.  
 
 ---
 
