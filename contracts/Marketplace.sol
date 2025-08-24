@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./ShipNFT.sol";
@@ -55,7 +55,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         address _ufoToken,
         address _shipNFT,
         address _stationNFT
-    ) Ownable(msg.sender) {
+    ) Ownable() {
         ufoToken = AbstractorsToken(_ufoToken);
         shipNFT = ShipNFT(_shipNFT);
         stationNFT = StationNFT(_stationNFT);

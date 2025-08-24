@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract AbstractorsToken is ERC20, Ownable {
-    constructor(uint256 initialSupply) ERC20("Abstractors Token", "UFO") Ownable(msg.sender) {
+    constructor(uint256 initialSupply) ERC20("Abstractors Token", "UFO") Ownable() {
         _mint(msg.sender, initialSupply);
     }
 

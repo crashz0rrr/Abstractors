@@ -1,9 +1,26 @@
 {
-  "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
-    "@openzeppelin/contracts": "^5.4.0",
-    "dotenv": "^17.2.1",
-    "hardhat": "^3.0.0"
+  "name": "abstract-spacegame",
+  "version": "1.0.0",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:abstract-testnet": "hardhat run scripts/deploy.js --network abstractTestnet",
+    "deploy:abstract-mainnet": "hardhat run scripts/deploy.js --network abstractMainnet",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "node": "hardhat node",
+    "verify:abstract-testnet": "hardhat verify --network abstractTestnet",
+    "verify:abstract-mainnet": "hardhat verify --network abstractMainnet"
   },
-  "type": "module"
+  "devDependencies": {
+    "@nomicfoundation/hardhat-verify": "^1.0.3",
+    "hardhat": "^2.19.0"
+  },
+  "dependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.0",
+    "@openzeppelin/contracts": "^4.9.0",
+    "chai": "^4.5.0",
+    "dotenv": "^16.3.0",
+    "ethers": "^5.0.0"
+  }
 }

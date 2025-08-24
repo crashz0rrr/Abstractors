@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract StationNFT is ERC721Enumerable, Ownable {
+contract StationNFT is ERC721, ERC721Enumerable, Ownable {
     struct Station {
         uint8 tier;
         uint8 boostPercent;
@@ -14,7 +15,9 @@ contract StationNFT is ERC721Enumerable, Ownable {
 
     event StationMinted(address indexed to, uint256 indexed tokenId, uint8 tier, uint8 boostPercent);
 
-    constructor() ERC721("Mining Station", "STATION") ERC721Enumerable() Ownable(msg.sender) {}
+    constructor() ERC721("Mining Station", "STATION") {
+        _transferOwnership(msg.sender);
+    }
 
     function mint(address to, uint8 tier) external onlyOwner returns (uint256) {
         uint256 tokenId = totalSupply() + 1;
@@ -42,12 +45,17 @@ contract StationNFT is ERC721Enumerable, Ownable {
         return tokenIds;
     }
 
-    function onlyOwnerOf(uint256 tokenId) internal view returns (bool) {
-        return ownerOf(tokenId) == msg.sender;
+    function getStation(uint256 tokenId) external view returns (Station memory) {
+        require(ownerOf(tokenId) == msg.sender, "Not owner of station");
+        return stations[tokenId];
     }
 
-    function getStation(uint256 tokenId) external view returns (Station memory) {
-        require(onlyOwnerOf(tokenId), "Station does not exist");
-        return stations[tokenId];
+    // Override required functions for multiple inheritance
+    function _beforeTokenTransfer(address from, address to, uint256 tokenId, uint256 batchSize) internal override(ERC721, ERC721Enumerable) {
+        super._beforeTokenTransfer(from, to, tokenId, batchSize);
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view override(ERC721, ERC721Enumerable) returns (bool) {
+        return super.supportsInterface(interfaceId);
     }
 }

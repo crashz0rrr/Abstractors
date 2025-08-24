@@ -2,7 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./ShipNFT.sol";
 import "./StationNFT.sol";
 import "./AbstractorsToken.sol";
@@ -21,27 +22,29 @@ contract PackSale is Ownable, ReentrancyGuard {
         LAUNCH_ULTIMATE 
     }
 
-    struct Pack {
-        PackType packType;
-        uint256 price;
-        uint256 ufoBonus;
-        ShipReward[] shipRewards;
-        StationReward[] stationRewards;
-        uint256 totalSupply;
-        uint256 maxSupply;
-        bool isActive;
-    }
-
     struct ShipReward {
         uint8 tier;
         uint8 level;
         uint256 basePower;
-        uint8 probability; // 0-100 percentage
+        uint8 probability;
     }
 
     struct StationReward {
         uint8 tier;
-        uint8 probability; // 0-100 percentage
+        uint8 probability;
+    }
+
+    struct Pack {
+        PackType packType;
+        uint256 price;
+        uint256 ufoBonus;
+        uint256 totalSupply;
+        uint256 maxSupply;
+        bool isActive;
+        uint256 shipRewardsCount;
+        uint256 stationRewardsCount;
+        mapping(uint256 => ShipReward) shipRewards;
+        mapping(uint256 => StationReward) stationRewards;
     }
 
     mapping(PackType => Pack) public packs;
@@ -54,125 +57,106 @@ contract PackSale is Ownable, ReentrancyGuard {
     event PackActivated(PackType packType, bool isActive);
     event PackSupplyUpdated(PackType packType, uint256 maxSupply);
 
-    constructor(
-        address _ufoToken,
-        address _shipNFT,
-        address _stationNFT
-    ) Ownable(msg.sender) {
+    constructor(address _ufoToken, address _shipNFT, address _stationNFT) {
         ufoToken = AbstractorsToken(_ufoToken);
         shipNFT = ShipNFT(_shipNFT);
         stationNFT = StationNFT(_stationNFT);
+        _transferOwnership(msg.sender);
 
         // Initialize presale packs
         _initializePacks();
     }
 
     function _initializePacks() internal {
-        // Presale Bronze Pack
-        packs[PackType.PRESALE_BRONZE] = Pack({
-            packType: PackType.PRESALE_BRONZE,
-            price: 100 ether, // 100 UFO tokens
-            ufoBonus: 50 ether, // 50 UFO bonus
-            shipRewards: _createShipRewards(new uint8[](2), new uint8[](2), new uint256[](2), new uint8[](2)),
-            stationRewards: new StationReward[](0),
-            totalSupply: 0,
-            maxSupply: 1000,
-            isActive: true
-        });
+        // Presale Bronze Pack - 2 ships
+        Pack storage bronze = packs[PackType.PRESALE_BRONZE];
+        bronze.packType = PackType.PRESALE_BRONZE;
+        bronze.price = 100 ether;
+        bronze.ufoBonus = 50 ether;
+        bronze.totalSupply = 0;
+        bronze.maxSupply = 1000;
+        bronze.isActive = true;
+        bronze.shipRewardsCount = 2;
+        bronze.stationRewardsCount = 0;
+        
+        bronze.shipRewards[0] = ShipReward(1, 1, 1000, 100);
+        bronze.shipRewards[1] = ShipReward(1, 1, 1000, 100);
 
-        // Presale Silver Pack
-        packs[PackType.PRESALE_SILVER] = Pack({
-            packType: PackType.PRESALE_SILVER,
-            price: 250 ether, // 250 UFO tokens
-            ufoBonus: 150 ether, // 150 UFO bonus
-            shipRewards: _createShipRewards(new uint8[](3), new uint8[](3), new uint256[](3), new uint8[](3)),
-            stationRewards: new StationReward[](0),
-            totalSupply: 0,
-            maxSupply: 500,
-            isActive: true
-        });
+        // Presale Silver Pack - 3 ships
+        Pack storage silver = packs[PackType.PRESALE_SILVER];
+        silver.packType = PackType.PRESALE_SILVER;
+        silver.price = 250 ether;
+        silver.ufoBonus = 150 ether;
+        silver.totalSupply = 0;
+        silver.maxSupply = 500;
+        silver.isActive = true;
+        silver.shipRewardsCount = 3;
+        silver.stationRewardsCount = 0;
+        
+        silver.shipRewards[0] = ShipReward(1, 1, 1000, 100);
+        silver.shipRewards[1] = ShipReward(1, 2, 1200, 80);
+        silver.shipRewards[2] = ShipReward(2, 1, 1500, 20);
 
-        // Presale Gold Pack
-        packs[PackType.PRESALE_GOLD] = Pack({
-            packType: PackType.PRESALE_GOLD,
-            price: 500 ether, // 500 UFO tokens
-            ufoBonus: 350 ether, // 350 UFO bonus
-            shipRewards: _createShipRewards(new uint8[](4), new uint8[](4), new uint256[](4), new uint8[](4)),
-            stationRewards: new StationReward[](1),
-            totalSupply: 0,
-            maxSupply: 250,
-            isActive: true
-        });
+        // Presale Gold Pack - 4 ships + 1 station
+        Pack storage gold = packs[PackType.PRESALE_GOLD];
+        gold.packType = PackType.PRESALE_GOLD;
+        gold.price = 500 ether;
+        gold.ufoBonus = 350 ether;
+        gold.totalSupply = 0;
+        gold.maxSupply = 250;
+        gold.isActive = true;
+        gold.shipRewardsCount = 4;
+        gold.stationRewardsCount = 1;
+        
+        gold.shipRewards[0] = ShipReward(1, 2, 1200, 100);
+        gold.shipRewards[1] = ShipReward(2, 1, 1500, 100);
+        gold.shipRewards[2] = ShipReward(2, 2, 1800, 50);
+        gold.shipRewards[3] = ShipReward(3, 1, 2000, 10);
+        gold.stationRewards[0] = StationReward(1, 100);
 
-        // Launch Basic Pack
-        packs[PackType.LAUNCH_BASIC] = Pack({
-            packType: PackType.LAUNCH_BASIC,
-            price: 50 ether, // 50 UFO tokens
-            ufoBonus: 0,
-            shipRewards: _createShipRewards(new uint8[](1), new uint8[](1), new uint256[](1), new uint8[](1)),
-            stationRewards: new StationReward[](0),
-            totalSupply: 0,
-            maxSupply: 5000,
-            isActive: false // Will be activated at launch
-        });
+        // Launch Basic Pack - 1 ship
+        Pack storage basic = packs[PackType.LAUNCH_BASIC];
+        basic.packType = PackType.LAUNCH_BASIC;
+        basic.price = 50 ether;
+        basic.ufoBonus = 0;
+        basic.totalSupply = 0;
+        basic.maxSupply = 5000;
+        basic.isActive = false;
+        basic.shipRewardsCount = 1;
+        basic.stationRewardsCount = 0;
+        
+        basic.shipRewards[0] = ShipReward(1, 1, 1000, 100);
 
-        // Launch Premium Pack
-        packs[PackType.LAUNCH_PREMIUM] = Pack({
-            packType: PackType.LAUNCH_PREMIUM,
-            price: 150 ether, // 150 UFO tokens
-            ufoBonus: 0,
-            shipRewards: _createShipRewards(new uint8[](2), new uint8[](2), new uint256[](2), new uint8[](2)),
-            stationRewards: new StationReward[](1),
-            totalSupply: 0,
-            maxSupply: 2000,
-            isActive: false
-        });
+        // Launch Premium Pack - 2 ships + 1 station
+        Pack storage premium = packs[PackType.LAUNCH_PREMIUM];
+        premium.packType = PackType.LAUNCH_PREMIUM;
+        premium.price = 150 ether;
+        premium.ufoBonus = 0;
+        premium.totalSupply = 0;
+        premium.maxSupply = 2000;
+        premium.isActive = false;
+        premium.shipRewardsCount = 2;
+        premium.stationRewardsCount = 1;
+        
+        premium.shipRewards[0] = ShipReward(1, 1, 1000, 100);
+        premium.shipRewards[1] = ShipReward(1, 2, 1200, 80);
+        premium.stationRewards[0] = StationReward(1, 100);
 
-        // Launch Ultimate Pack
-        packs[PackType.LAUNCH_ULTIMATE] = Pack({
-            packType: PackType.LAUNCH_ULTIMATE,
-            price: 300 ether, // 300 UFO tokens
-            ufoBonus: 0,
-            shipRewards: _createShipRewards(new uint8[](3), new uint8[](3), new uint256[](3), new uint8[](3)),
-            stationRewards: new StationReward[](1),
-            totalSupply: 0,
-            maxSupply: 1000,
-            isActive: false
-        });
-
-        // Set specific rewards for each pack (simplified for example)
-        _setPresaleRewards();
-    }
-
-    function _createShipRewards(
-        uint8[] memory tiers,
-        uint8[] memory levels,
-        uint256[] memory basePowers,
-        uint8[] memory probabilities
-    ) internal pure returns (ShipReward[] memory) {
-        ShipReward[] memory rewards = new ShipReward[](tiers.length);
-        for (uint256 i = 0; i < tiers.length; i++) {
-            rewards[i] = ShipReward(tiers[i], levels[i], basePowers[i], probabilities[i]);
-        }
-        return rewards;
-    }
-
-    function _setPresaleRewards() internal {
-        // Presale Bronze - 2x Tier 1 Ships
-        packs[PackType.PRESALE_BRONZE].shipRewards[0] = ShipReward(1, 1, 1000, 100); // 100% chance
-        packs[PackType.PRESALE_BRONZE].shipRewards[1] = ShipReward(1, 1, 1000, 100); // 100% chance
-
-        // Presale Silver - 3x Tier 1-2 Ships
-        packs[PackType.PRESALE_SILVER].shipRewards[0] = ShipReward(1, 1, 1000, 100);
-        packs[PackType.PRESALE_SILVER].shipRewards[1] = ShipReward(1, 2, 1200, 80); // 80% chance
-        packs[PackType.PRESALE_SILVER].shipRewards[2] = ShipReward(2, 1, 1500, 20); // 20% chance
-
-        // Presale Gold - 4x Tier 1-3 Ships + Station
-        packs[PackType.PRESALE_GOLD].shipRewards[0] = ShipReward(1, 2, 1200, 100);
-        packs[PackType.PRESALE_GOLD].shipRewards[1] = ShipReward(2, 1, 1500, 100);
-        packs[PackType.PRESALE_GOLD].shipRewards[2] = ShipReward(2, 2, 1800, 50);
-        packs[PackType.PRESALE_GOLD].shipRewards[3] = ShipReward(3, 1, 2000, 10);
-        packs[PackType.PRESALE_GOLD].stationRewards[0] = StationReward(1, 100); // 100% chance Tier 1 Station
+        // Launch Ultimate Pack - 3 ships + 1 station
+        Pack storage ultimate = packs[PackType.LAUNCH_ULTIMATE];
+        ultimate.packType = PackType.LAUNCH_ULTIMATE;
+        ultimate.price = 300 ether;
+        ultimate.ufoBonus = 0;
+        ultimate.totalSupply = 0;
+        ultimate.maxSupply = 1000;
+        ultimate.isActive = false;
+        ultimate.shipRewardsCount = 3;
+        ultimate.stationRewardsCount = 1;
+        
+        ultimate.shipRewards[0] = ShipReward(1, 2, 1200, 100);
+        ultimate.shipRewards[1] = ShipReward(2, 1, 1500, 80);
+        ultimate.shipRewards[2] = ShipReward(2, 2, 1800, 50);
+        ultimate.stationRewards[0] = StationReward(2, 100);
     }
 
     function purchasePack(PackType packType) external nonReentrant {
@@ -193,9 +177,31 @@ contract PackSale is Ownable, ReentrancyGuard {
             ufoToken.transfer(msg.sender, pack.ufoBonus);
         }
 
-        // Mint ships and stations
-        uint256[] memory shipTokenIds = _mintShips(msg.sender, pack.shipRewards);
-        uint256[] memory stationTokenIds = _mintStations(msg.sender, pack.stationRewards);
+        // Mint ships
+        uint256[] memory shipTokenIds = new uint256[](pack.shipRewardsCount);
+        uint256 shipMintedCount = 0;
+        
+        for (uint256 i = 0; i < pack.shipRewardsCount; i++) {
+            ShipReward storage reward = pack.shipRewards[i];
+            if (_shouldMint(reward.probability)) {
+                uint256 tokenId = shipNFT.mint(msg.sender, reward.tier, reward.level, reward.basePower);
+                shipTokenIds[shipMintedCount] = tokenId;
+                shipMintedCount++;
+            }
+        }
+
+        // Mint stations
+        uint256[] memory stationTokenIds = new uint256[](pack.stationRewardsCount);
+        uint256 stationMintedCount = 0;
+        
+        for (uint256 i = 0; i < pack.stationRewardsCount; i++) {
+            StationReward storage reward = pack.stationRewards[i];
+            if (_shouldMint(reward.probability)) {
+                uint256 tokenId = stationNFT.mint(msg.sender, reward.tier);
+                stationTokenIds[stationMintedCount] = tokenId;
+                stationMintedCount++;
+            }
+        }
 
         // Update pack statistics
         pack.totalSupply++;
@@ -203,56 +209,23 @@ contract PackSale is Ownable, ReentrancyGuard {
         totalPurchases[msg.sender]++;
 
         emit PackPurchased(msg.sender, packType, pack.price);
-        if (shipTokenIds.length > 0) {
-            emit ShipsMinted(msg.sender, shipTokenIds);
-        }
-        if (stationTokenIds.length > 0) {
-            emit StationsMinted(msg.sender, stationTokenIds);
-        }
-    }
-
-    function _mintShips(address to, ShipReward[] memory rewards) internal returns (uint256[] memory) {
-        uint256[] memory tokenIds = new uint256[](rewards.length);
-        uint256 mintedCount = 0;
-
-        for (uint256 i = 0; i < rewards.length; i++) {
-            ShipReward memory reward = rewards[i];
-            if (_shouldMint(reward.probability)) {
-                uint256 tokenId = shipNFT.mint(to, reward.tier, reward.level, reward.basePower);
-                tokenIds[mintedCount] = tokenId;
-                mintedCount++;
+        
+        // Emit events with properly sized arrays
+        if (shipMintedCount > 0) {
+            uint256[] memory actualShipTokenIds = new uint256[](shipMintedCount);
+            for (uint256 i = 0; i < shipMintedCount; i++) {
+                actualShipTokenIds[i] = shipTokenIds[i];
             }
+            emit ShipsMinted(msg.sender, actualShipTokenIds);
         }
-
-        // Resize array to actual minted count
-        uint256[] memory actualTokenIds = new uint256[](mintedCount);
-        for (uint256 i = 0; i < mintedCount; i++) {
-            actualTokenIds[i] = tokenIds[i];
-        }
-
-        return actualTokenIds;
-    }
-
-    function _mintStations(address to, StationReward[] memory rewards) internal returns (uint256[] memory) {
-        uint256[] memory tokenIds = new uint256[](rewards.length);
-        uint256 mintedCount = 0;
-
-        for (uint256 i = 0; i < rewards.length; i++) {
-            StationReward memory reward = rewards[i];
-            if (_shouldMint(reward.probability)) {
-                uint256 tokenId = stationNFT.mint(to, reward.tier);
-                tokenIds[mintedCount] = tokenId;
-                mintedCount++;
+        
+        if (stationMintedCount > 0) {
+            uint256[] memory actualStationTokenIds = new uint256[](stationMintedCount);
+            for (uint256 i = 0; i < stationMintedCount; i++) {
+                actualStationTokenIds[i] = stationTokenIds[i];
             }
+            emit StationsMinted(msg.sender, actualStationTokenIds);
         }
-
-        // Resize array to actual minted count
-        uint256[] memory actualTokenIds = new uint256[](mintedCount);
-        for (uint256 i = 0; i < mintedCount; i++) {
-            actualTokenIds[i] = tokenIds[i];
-        }
-
-        return actualTokenIds;
     }
 
     function _shouldMint(uint8 probability) internal view returns (bool) {
@@ -280,14 +253,17 @@ contract PackSale is Ownable, ReentrancyGuard {
         packs[packType].price = newPrice;
     }
 
-    function updatePackRewards(
-        PackType packType,
-        ShipReward[] memory newShipRewards,
-        StationReward[] memory newStationRewards,
-        uint256 newUfoBonus
-    ) external onlyOwner {
-        packs[packType].shipRewards = newShipRewards;
-        packs[packType].stationRewards = newStationRewards;
+    function updateShipReward(PackType packType, uint256 rewardIndex, ShipReward memory newReward) external onlyOwner {
+        require(rewardIndex < packs[packType].shipRewardsCount, "Invalid reward index");
+        packs[packType].shipRewards[rewardIndex] = newReward;
+    }
+
+    function updateStationReward(PackType packType, uint256 rewardIndex, StationReward memory newReward) external onlyOwner {
+        require(rewardIndex < packs[packType].stationRewardsCount, "Invalid reward index");
+        packs[packType].stationRewards[rewardIndex] = newReward;
+    }
+
+    function updatePackUfoBonus(PackType packType, uint256 newUfoBonus) external onlyOwner {
         packs[packType].ufoBonus = newUfoBonus;
     }
 
@@ -307,9 +283,19 @@ contract PackSale is Ownable, ReentrancyGuard {
             pack.totalSupply,
             pack.maxSupply,
             pack.isActive,
-            pack.shipRewards.length,
-            pack.stationRewards.length
+            pack.shipRewardsCount,
+            pack.stationRewardsCount
         );
+    }
+
+    function getShipReward(PackType packType, uint256 index) external view returns (ShipReward memory) {
+        require(index < packs[packType].shipRewardsCount, "Invalid index");
+        return packs[packType].shipRewards[index];
+    }
+
+    function getStationReward(PackType packType, uint256 index) external view returns (StationReward memory) {
+        require(index < packs[packType].stationRewardsCount, "Invalid index");
+        return packs[packType].stationRewards[index];
     }
 
     function getUserPackPurchases(address user) external view returns (uint256[6] memory) {

@@ -15,10 +15,11 @@ contract RewardClaim is Ownable {
 
     mapping(address => uint256) public lastClaim;
 
-    constructor(address _shipNFT, address _stationNFT, address _ufoToken) Ownable(msg.sender) {
+    constructor(address _shipNFT, address _stationNFT, address _ufoToken) {
         shipNFT = ShipNFT(_shipNFT);
         stationNFT = StationNFT(_stationNFT);
         ufoToken = AbstractorsToken(_ufoToken);
+        _transferOwnership(msg.sender);
     }
 
     function claimRewards() external {
