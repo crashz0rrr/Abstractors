@@ -1,0 +1,35 @@
+module.exports = {
+  PACK_TYPES: {
+    0: 'PRESALE_BRONZE',
+    1: 'PRESALE_SILVER',
+    2: 'PRESALE_GOLD',
+    3: 'LAUNCH_BASIC',
+    4: 'LAUNCH_PREMIUM',
+    5: 'LAUNCH_ULTIMATE'
+  },
+
+  LISTING_TYPES: {
+    SHIP: 'SHIP',
+    STATION: 'STATION'
+  },
+
+  TRANSACTION_TYPES: {
+    PACK_PURCHASE: 'PACK_PURCHASE',
+    MARKETPLACE_BUY: 'MARKETPLACE_BUY',
+    MARKETPLACE_SELL: 'MARKETPLACE_SELL',
+    REWARD_CLAIM: 'REWARD_CLAIM'
+  },
+
+  STATUS: {
+    PENDING: 'PENDING',
+    SUCCESS: 'SUCCESS',
+    FAILED: 'FAILED'
+  },
+
+  CACHE_TTL: {
+    SHORT: 60, // 1 minute
+    MEDIUM: 300, // 5 minutes
+    LONG: 1800, // 30 minutes
+    VERY_LONG: 3600 // 1 hour
+  }
+};
