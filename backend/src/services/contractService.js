@@ -171,6 +171,43 @@ class ContractService {
       throw error;
     }
   }
+
+  async getUserMiningStats(userAddress) {
+    try {
+            const stats = await this.contracts.rewardClaim.getUserMiningStats(userAddress);
+            
+            return {
+                fleetPower: ethers.formatUnits(stats.fleetPower, 0),
+                pendingRewards: ethers.formatUnits(stats.pendingRewards, 18),
+                nextClaimTime: new Date(parseInt(stats.nextClaimTime.toString()) * 1000).toISOString(),
+                totalEarned: ethers.formatUnits(stats.totalEarned, 18),
+                canClaim: Date.now() >= parseInt(stats.nextClaimTime.toString()) * 1000
+            };
+        } catch (error) {
+            logger.error('Error getting user mining stats:', error);
+            throw error;
+        }
+    }
+
+    async getGlobalMiningStats() {
+        try {
+                const [totalFleetPower, totalEmitted, emissionRate] = await Promise.all([
+                this.contracts.rewardClaim.getTotalFleetPower(),
+                this.contracts.rewardClaim.totalEmitted(),
+                this.contracts.rewardClaim.baseEmissionRate()
+                ]);
+
+                return {
+                    totalFleetPower: ethers.formatUnits(totalFleetPower, 0),
+                    totalUfoEmitted: ethers.formatUnits(totalEmitted, 18),
+                    emissionRate: ethers.formatUnits(emissionRate, 18),
+                    emissionRatePerHour: ethers.formatUnits(emissionRate, 18) + ' UFO per fleet power per hour'
+                };
+            } catch (error) {
+                logger.error('Error getting global mining stats:', error);
+                throw error;
+            }
+    }
 }
 
 module.exports = new ContractService();

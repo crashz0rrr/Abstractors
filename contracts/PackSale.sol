@@ -319,4 +319,12 @@ contract PackSale is Ownable, ReentrancyGuard {
     function rescueETH(uint256 amount) external onlyOwner {
         payable(owner()).transfer(amount);
     }
+
+    function mintShipDirectly(address to, uint8 tier, uint8 level, uint256 basePower) external onlyOwner {
+        shipNFT.mint(to, tier, level, basePower);
+    }
+
+    function mintStationDirectly(address to, uint8 tier) external onlyOwner {
+        stationNFT.mint(to, tier);
+    }
 }

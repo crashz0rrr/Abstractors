@@ -1,25 +1,50 @@
 const express = require('express');
 const router = express.Router();
+const contractService = require('../services/contractService');
+const { validateRequest, schemas } = require('../middlewares/validation');
 
-// Claim rewards (placeholder)
-router.post('/claim', async (req, res) => {
+// Get user mining stats
+router.get('/mining/:address', async (req, res) => {
   try {
-    const { userAddress } = req.body;
+    const { address } = req.params;
+    
+    const stats = await contractService.getUserMiningStats(address);
     
     res.json({
       success: true,
       data: {
-        message: 'Reward claim endpoint - requires wallet integration',
-        userAddress,
-        rewards: '100.0 UFO',
-        transaction: '0x...'
+        address,
+        ...stats,
+        timestamp: new Date().toISOString()
       }
     });
   } catch (error) {
-    console.error('Reward claim error:', error);
+    console.error('Mining stats error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to claim rewards',
+      error: 'Failed to fetch mining stats',
+      message: error.message
+    });
+  }
+});
+
+// Get global mining statistics
+router.get('/global', async (req, res) => {
+  try {
+    const stats = await contractService.getGlobalMiningStats();
+    
+    res.json({
+      success: true,
+      data: {
+        ...stats,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Global mining stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch global mining stats',
       message: error.message
     });
   }
