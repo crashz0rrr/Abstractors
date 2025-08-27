@@ -1,67 +1,75 @@
 const { ethers } = require('ethers');
+const { getChainConfig, defaultChainId } = require('../config/chains');
+const logger = require('../utils/logger');
+
+// Import your contract ABIs
 const AbstractorsTokenABI = require('../abis/AbstractorsToken.json');
 const ShipNFTABI = require('../abis/ShipNFT.json');
 const StationNFTABI = require('../abis/StationNFT.json');
 const MarketplaceABI = require('../abis/Marketplace.json');
 const PackSaleABI = require('../abis/PackSale.json');
 const RewardClaimABI = require('../abis/RewardClaim.json');
-const logger = require('../utils/logger');
 
 class ContractService {
   constructor() {
-    this.provider = new ethers.JsonRpcProvider(process.env.ABSTRACT_RPC_URL);
+    this.providers = {};
     this.contracts = {};
-    this.initializeContracts();
+    this.abis = {
+      UFO: AbstractorsTokenABI.abi,
+      ShipNFT: ShipNFTABI.abi,
+      StationNFT: StationNFTABI.abi,
+      Marketplace: MarketplaceABI.abi,
+      PackSale: PackSaleABI.abi,
+      RewardClaim: RewardClaimABI.abi
+    };
   }
 
-  initializeContracts() {
+  getProvider(chainId = defaultChainId) {
+    if (!this.providers[chainId]) {
+      const config = getChainConfig(chainId);
+      this.providers[chainId] = new ethers.JsonRpcProvider(config.rpc);
+    }
+    return this.providers[chainId];
+  }
+
+  getContract(contractName, chainId = defaultChainId) {
+    const cacheKey = `${chainId}_${contractName}`;
+    
+    if (!this.contracts[cacheKey]) {
+      const config = getChainConfig(chainId);
+      const provider = this.getProvider(chainId);
+      const address = config.contracts[contractName];
+      
+      if (!address) {
+        throw new Error(`Contract ${contractName} not configured for chain ${chainId}`);
+      }
+
+      this.contracts[cacheKey] = new ethers.Contract(
+        address,
+        this.abis[contractName],
+        provider
+      );
+    }
+    
+    return this.contracts[cacheKey];
+  }
+
+  // Generic read function for any contract method
+  async readContract(contractName, functionName, args = [], chainId = defaultChainId) {
     try {
-      this.contracts.ufoToken = new ethers.Contract(
-        process.env.CONTRACT_UFO,
-        AbstractorsTokenABI.abi,
-        this.provider
-      );
-
-      this.contracts.shipNFT = new ethers.Contract(
-        process.env.CONTRACT_SHIP_NFT,
-        ShipNFTABI.abi,
-        this.provider
-      );
-
-      this.contracts.stationNFT = new ethers.Contract(
-        process.env.CONTRACT_STATION_NFT,
-        StationNFTABI.abi,
-        this.provider
-      );
-
-      this.contracts.marketplace = new ethers.Contract(
-        process.env.CONTRACT_MARKETPLACE,
-        MarketplaceABI.abi,
-        this.provider
-      );
-
-      this.contracts.packSale = new ethers.Contract(
-        process.env.CONTRACT_PACK_SALE,
-        PackSaleABI.abi,
-        this.provider
-      );
-
-      this.contracts.rewardClaim = new ethers.Contract(
-        process.env.CONTRACT_REWARD_CLAIM,
-        RewardClaimABI.abi,
-        this.provider
-      );
-
-      logger.info('✅ All contracts initialized successfully');
+      const contract = this.getContract(contractName, chainId);
+      return await contract[functionName](...args);
     } catch (error) {
-      logger.error('❌ Contract initialization failed:', error);
+      logger.error(`Error reading ${contractName}.${functionName}:`, error);
       throw error;
     }
   }
 
-  async getFleetPower(userAddress) {
+  // --- Specific Methods with Chain Awareness ---
+
+  async getFleetPower(userAddress, chainId = defaultChainId) {
     try {
-      const power = await this.contracts.rewardClaim.getFleetPower(userAddress);
+      const power = await this.readContract('RewardClaim', 'getFleetPower', [userAddress], chainId);
       return ethers.formatUnits(power, 0);
     } catch (error) {
       logger.error('Error getting fleet power:', error);
@@ -69,16 +77,17 @@ class ContractService {
     }
   }
 
-  async getMarketplaceListings() {
+  async getMarketplaceListings(chainId = defaultChainId) {
     try {
-      const listings = await this.contracts.marketplace.getActiveListings();
+      const listings = await this.readContract('Marketplace', 'getActiveListings', [], chainId);
       return listings.map(listing => ({
         id: listing.id.toString(),
         seller: listing.seller,
         listingType: listing.listingType,
         tokenId: listing.tokenId.toString(),
         price: ethers.formatUnits(listing.price, 18),
-        status: listing.status
+        status: listing.status,
+        chainId // Include chain ID for frontend
       }));
     } catch (error) {
       logger.error('Error getting marketplace listings:', error);
@@ -86,16 +95,17 @@ class ContractService {
     }
   }
 
-  async getUserNFTs(userAddress) {
+  async getUserNFTs(userAddress, chainId = defaultChainId) {
     try {
       const [ships, stations] = await Promise.all([
-        this.contracts.shipNFT.getOwnedShips(userAddress),
-        this.contracts.stationNFT.getOwnedStations(userAddress)
+        this.readContract('ShipNFT', 'getOwnedShips', [userAddress], chainId),
+        this.readContract('StationNFT', 'getOwnedStations', [userAddress], chainId)
       ]);
 
       return {
         ships: ships.map(id => id.toString()),
-        stations: stations.map(id => id.toString())
+        stations: stations.map(id => id.toString()),
+        chainId
       };
     } catch (error) {
       logger.error('Error getting user NFTs:', error);
@@ -103,48 +113,9 @@ class ContractService {
     }
   }
 
-  async getPacksInfo() {
+  async getTokenBalance(userAddress, chainId = defaultChainId) {
     try {
-      const packTypes = [0, 1, 2, 3, 4, 5];
-      const packs = [];
-
-      for (const packType of packTypes) {
-        const info = await this.contracts.packSale.getPackInfo(packType);
-        packs.push({
-          type: packType,
-          name: this.getPackName(packType),
-          price: ethers.formatUnits(info.price, 18),
-          ufoBonus: ethers.formatUnits(info.ufoBonus, 18),
-          totalSupply: info.totalSupply.toString(),
-          maxSupply: info.maxSupply.toString(),
-          isActive: info.isActive,
-          shipRewardCount: info.shipRewardCount.toString(),
-          stationRewardCount: info.stationRewardCount.toString()
-        });
-      }
-
-      return packs;
-    } catch (error) {
-      logger.error('Error getting packs info:', error);
-      throw error;
-    }
-  }
-
-  getPackName(packType) {
-    const names = [
-      'PRESALE_BRONZE',
-      'PRESALE_SILVER',
-      'PRESALE_GOLD',
-      'LAUNCH_BASIC',
-      'LAUNCH_PREMIUM',
-      'LAUNCH_ULTIMATE'
-    ];
-    return names[packType] || 'UNKNOWN';
-  }
-
-  async getTokenBalance(userAddress) {
-    try {
-      const balance = await this.contracts.ufoToken.balanceOf(userAddress);
+      const balance = await this.readContract('UFO', 'balanceOf', [userAddress], chainId);
       return ethers.formatUnits(balance, 18);
     } catch (error) {
       logger.error('Error getting token balance:', error);
@@ -152,19 +123,21 @@ class ContractService {
     }
   }
 
-  async getGlobalStats() {
+  async getGlobalStats(chainId = defaultChainId) {
     try {
-      const [totalShips, totalStations, totalListings] = await Promise.all([
-        this.contracts.shipNFT.totalSupply(),
-        this.contracts.stationNFT.totalSupply(),
-        this.contracts.marketplace.listingCount()
+      const [totalShips, totalStations, totalListings, totalFleetPower] = await Promise.all([
+        this.readContract('ShipNFT', 'totalSupply', [], chainId),
+        this.readContract('StationNFT', 'totalSupply', [], chainId),
+        this.readContract('Marketplace', 'listingCount', [], chainId),
+        this.readContract('RewardClaim', 'getTotalFleetPower', [], chainId)
       ]);
 
       return {
         totalShips: totalShips.toString(),
         totalStations: totalStations.toString(),
         totalListings: totalListings.toString(),
-        totalFleetPower: await this.contracts.rewardClaim.getTotalFleetPower()
+        totalFleetPower: ethers.formatUnits(totalFleetPower, 0),
+        chainId
       };
     } catch (error) {
       logger.error('Error getting global stats:', error);
@@ -172,42 +145,21 @@ class ContractService {
     }
   }
 
-  async getUserMiningStats(userAddress) {
-    try {
-            const stats = await this.contracts.rewardClaim.getUserMiningStats(userAddress);
-            
-            return {
-                fleetPower: ethers.formatUnits(stats.fleetPower, 0),
-                pendingRewards: ethers.formatUnits(stats.pendingRewards, 18),
-                nextClaimTime: new Date(parseInt(stats.nextClaimTime.toString()) * 1000).toISOString(),
-                totalEarned: ethers.formatUnits(stats.totalEarned, 18),
-                canClaim: Date.now() >= parseInt(stats.nextClaimTime.toString()) * 1000
-            };
-        } catch (error) {
-            logger.error('Error getting user mining stats:', error);
-            throw error;
-        }
+  // Add methods for other chains
+  async getMultiChainBalances(userAddress) {
+    const balances = {};
+    
+    for (const chainId of Object.keys(this.providers)) {
+      try {
+        balances[chainId] = await this.getTokenBalance(userAddress, parseInt(chainId));
+      } catch (error) {
+        logger.warn(`Could not get balance for chain ${chainId}:`, error.message);
+        balances[chainId] = '0';
+      }
     }
-
-    async getGlobalMiningStats() {
-        try {
-                const [totalFleetPower, totalEmitted, emissionRate] = await Promise.all([
-                this.contracts.rewardClaim.getTotalFleetPower(),
-                this.contracts.rewardClaim.totalEmitted(),
-                this.contracts.rewardClaim.baseEmissionRate()
-                ]);
-
-                return {
-                    totalFleetPower: ethers.formatUnits(totalFleetPower, 0),
-                    totalUfoEmitted: ethers.formatUnits(totalEmitted, 18),
-                    emissionRate: ethers.formatUnits(emissionRate, 18),
-                    emissionRatePerHour: ethers.formatUnits(emissionRate, 18) + ' UFO per fleet power per hour'
-                };
-            } catch (error) {
-                logger.error('Error getting global mining stats:', error);
-                throw error;
-            }
-    }
+    
+    return balances;
+  }
 }
 
 module.exports = new ContractService();

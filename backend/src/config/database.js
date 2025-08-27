@@ -6,6 +6,9 @@ const connectDatabase = async () => {
     const conn = await mongoose.connect(process.env.DATABASE_URL, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
+      // Added recommended settings
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
     });
 
     logger.info(`✅ MongoDB Connected: ${conn.connection.host}`);
@@ -16,9 +19,10 @@ const connectDatabase = async () => {
     });
 
     mongoose.connection.on('disconnected', () => {
-      logger.warn('MongoDB disconnected');
+      logger.warn('MongoDB disconnected. Attempting to reconnect...');
     });
 
+    // Graceful shutdown
     process.on('SIGINT', async () => {
       await mongoose.connection.close();
       logger.info('MongoDB connection closed through app termination');
@@ -26,7 +30,7 @@ const connectDatabase = async () => {
     });
 
   } catch (error) {
-    logger.error('MongoDB connection failed:', error);
+    logger.error('❌ MongoDB connection failed:', error.message);
     process.exit(1);
   }
 };

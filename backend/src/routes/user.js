@@ -1,76 +1,104 @@
 const express = require('express');
 const router = express.Router();
-const contractService = require('../services/contractService');
-const validationService = require('../services/validationService');
+const userService = require('../services/userService');
+const { authenticateToken, optionalAuth } = require('../middlewares/auth');
+const { success, responses } = require('../utils/response');
+const { catchAsync } = require('../utils/errorHandler');
+const { validateEthereumAddress } = require('../utils/errorHandler');
 
-// Get user profile
-router.get('/:address', async (req, res) => {
-  try {
+// Get user overview
+router.get('/:address',
+  optionalAuth,
+  catchAsync(async (req, res) => {
+    const { address } = req.params;
+    const { chainId } = req.query;
+    
+    validateEthereumAddress(address, 'address');
+    
+    const userData = await userService.getUserOverview(address, chainId);
+    
+    if (!userData) {
+      return responses.notFound(res, 'User not found');
+    }
+    
+    success(res, 'User data retrieved', userData);
+  })
+);
+
+// Get user fleet details
+router.get('/:address/fleet',
+  optionalAuth,
+  catchAsync(async (req, res) => {
     const { address } = req.params;
     
-    if (!validationService.isValidAddress(address)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid address format'
-      });
-    }
+    validateEthereumAddress(address, 'address');
+    
+    const fleetData = await userService.getUserFleetDetails(address);
+    success(res, 'Fleet data retrieved', fleetData);
+  })
+);
 
-    const [nfts, fleetPower, tokenBalance] = await Promise.all([
-      contractService.getUserNFTs(address),
-      contractService.getFleetPower(address),
-      contractService.getTokenBalance(address)
-    ]);
+// Get user's NFTs across all chains
+router.get('/:address/nfts',
+  optionalAuth,
+  catchAsync(async (req, res) => {
+    const { address } = req.params;
+    const { chainId } = req.query;
+    
+    validateEthereumAddress(address, 'address');
+    
+    const nfts = await userService.getUserNFTs(address, chainId);
+    success(res, 'User NFTs retrieved', nfts);
+  })
+);
 
-    res.json({
-      success: true,
-      data: {
-        address,
-        nfts,
-        fleetPower,
-        tokenBalance,
-        lastUpdated: new Date().toISOString()
-      }
-    });
-  } catch (error) {
-    console.error('User profile error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch user data',
-      message: error.message
-    });
-  }
-});
-
-// Get user's fleet details
-router.get('/:address/fleet', async (req, res) => {
-  try {
+// Get user's balances across all chains
+router.get('/:address/balances',
+  optionalAuth,
+  catchAsync(async (req, res) => {
     const { address } = req.params;
     
-    if (!validationService.isValidAddress(address)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid address format'
-      });
-    }
-
-    const fleetPower = await contractService.getFleetPower(address);
+    validateEthereumAddress(address, 'address');
     
-    res.json({
-      success: true,
-      data: {
-        address,
-        fleetPower,
-        calculationTime: new Date().toISOString()
-      }
-    });
-  } catch (error) {
-    console.error('Fleet power error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to calculate fleet power',
-      message: error.message
-    });
-  }
-});
+    const balances = await userService.getUserBalances(address);
+    success(res, 'User balances retrieved', balances);
+  })
+);
+
+// Update user profile (authenticated)
+router.put('/profile',
+  authenticateToken,
+  catchAsync(async (req, res) => {
+    const { username, email } = req.body;
+    
+    const updatedUser = await userService.updateUserProfile(req.user.address, { username, email });
+    success(res, 'Profile updated successfully', updatedUser);
+  })
+);
+
+// Search users
+router.get('/search/:query',
+  catchAsync(async (req, res) => {
+    const { query } = req.params;
+    const { limit = 10 } = req.query;
+    
+    const users = await userService.searchUsers(query, parseInt(limit));
+    success(res, 'Users found', users);
+  })
+);
+
+// Get user activity feed
+router.get('/:address/activity',
+  optionalAuth,
+  catchAsync(async (req, res) => {
+    const { address } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+    
+    validateEthereumAddress(address, 'address');
+    
+    const activity = await userService.getUserActivity(address, parseInt(page), parseInt(limit));
+    success(res, 'User activity retrieved', activity);
+  })
+);
 
 module.exports = router;

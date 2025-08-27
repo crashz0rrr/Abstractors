@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { ethers } = require('ethers');
 const { response } = require('../utils/response');
 const logger = require('../utils/logger');
 
@@ -36,12 +37,50 @@ const optionalAuth = (req, res, next) => {
   next();
 };
 
+// Middleware to verify wallet signature for Web3 authentication
+const verifyWalletSignature = async (req, res, next) => {
+  try {
+    const { address, signature, message } = req.body;
+
+    if (!address || !signature || !message) {
+      return res.status(400).json(response(false, null, 'Address, signature, and message are required'));
+    }
+
+    // Verify the signature
+    const signerAddress = ethers.verifyMessage(message, signature);
+    
+    if (signerAddress.toLowerCase() !== address.toLowerCase()) {
+      return res.status(401).json(response(false, null, 'Invalid signature'));
+    }
+
+    // Check if message is recent (prevent replay attacks)
+    const messageTime = parseInt(message.split('Timestamp: ')[1]);
+    if (Date.now() - messageTime > 5 * 60 * 1000) { // 5 minutes
+      return res.status(401).json(response(false, null, 'Signature expired'));
+    }
+
+    req.walletAddress = address;
+    next();
+  } catch (error) {
+    logger.error('Wallet signature verification failed:', error);
+    return res.status(401).json(response(false, null, 'Signature verification failed'));
+  }
+};
+
 const generateToken = (payload) => {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
+};
+
+// Generate a message for the user to sign
+const generateAuthMessage = (address) => {
+  const timestamp = Date.now();
+  return `Please sign this message to authenticate with SpaceGame. Timestamp: ${timestamp}`;
 };
 
 module.exports = {
   authenticateToken,
   optionalAuth,
-  generateToken
+  verifyWalletSignature,
+  generateToken,
+  generateAuthMessage
 };

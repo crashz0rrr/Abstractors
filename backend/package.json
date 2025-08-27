@@ -19,9 +19,11 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^7.5.0",
     "moralis": "^2.22.1",
+    "node-cron": "^4.2.1",
     "rate-limiter-flexible": "^2.4.1",
     "redis": "^4.6.8",
     "swagger-ui-express": "^4.6.3",
+    "winston": "^3.17.0",
     "yamljs": "^0.3.0"
   },
   "devDependencies": {
